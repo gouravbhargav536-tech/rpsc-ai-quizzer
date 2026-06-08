@@ -1,0 +1,128 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile with gamification stats and metadata",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The user's authentication UID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "streak": {
+          "type": "integer",
+          "description": "Consecutive days of active quizzes"
+        },
+        "badges": {
+          "type": "array",
+          "description": "List of unlocked badges"
+        },
+        "quizCount": {
+          "type": "integer",
+          "description": "Total number of completed quizzes"
+        },
+        "lastQuizDate": {
+          "type": "string",
+          "description": "Date of the last completed quiz"
+        },
+        "lastDailyDate": {
+          "type": "string",
+          "description": "Date of the last completed daily challenge"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Updated timestamp"
+        }
+      },
+      "required": [
+        "uid",
+        "name",
+        "email"
+      ]
+    },
+    "Quiz": {
+      "title": "Quiz Result",
+      "description": "Completed quiz session details and score",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The owner of this quiz result"
+        },
+        "subject": {
+          "type": "string",
+          "description": "Subject name"
+        },
+        "difficulty": {
+          "type": "string",
+          "description": "Difficulty level"
+        },
+        "language": {
+          "type": "string",
+          "description": "Language used"
+        },
+        "score": {
+          "type": "integer",
+          "description": "Number of correct answers"
+        },
+        "totalQuestions": {
+          "type": "integer",
+          "description": "Total number of questions in quiz"
+        },
+        "timeSpent": {
+          "type": "integer",
+          "description": "Time spent in seconds"
+        },
+        "questions": {
+          "type": "array",
+          "description": "List of questions generated"
+        },
+        "userAnswers": {
+          "type": "array",
+          "description": "List of answers submitted by the user"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Submission time"
+        }
+      },
+      "required": [
+        "userId",
+        "subject",
+        "difficulty",
+        "language",
+        "score",
+        "totalQuestions",
+        "timeSpent",
+        "questions",
+        "userAnswers",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "A user document containing display name, stats, and gamification state"
+    },
+    "/quizzes/{quizId}": {
+      "schema": "Quiz",
+      "description": "A quiz document stored in a global root collection, owned and read only by the owner user"
+    }
+  }
+}

@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global safety net - Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive / global reusable verification helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Role checks
+    function isAdmin() {
+      return isEmailVerified() && (
+        request.auth.token.email == 'gk4100777@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // 2. Pillar 2: Validation Blueprints (Strict type checks & schema matching)
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'email']) &&
+             data.keys().size() >= 3 &&
+             data.uid is string && data.uid.size() <= 128 &&
+             data.name is string && data.name.size() <= 100 &&
+             data.email is string && data.email.size() <= 150 &&
+             (!data.keys().hasAny(['streak']) || (data.streak is int && data.streak >= 0 && data.streak <= 10000)) &&
+             (!data.keys().hasAny(['quizCount']) || (data.quizCount is int && data.quizCount >= 0 && data.quizCount <= 100000)) &&
+             (!data.keys().hasAny(['lastQuizDate']) || (data.lastQuizDate is string && data.lastQuizDate.size() <= 50)) &&
+             (!data.keys().hasAny(['lastDailyDate']) || (data.lastDailyDate is string && data.lastDailyDate.size() <= 50)) &&
+             (!data.keys().hasAny(['badges']) || (data.badges is list && data.badges.size() <= 50));
+    }
+
+    match /users/{userId} {
+      allow create: if isEmailVerified() && 
+                      isValidId(userId) && 
+                      userId == request.auth.uid && 
+                      isValidUser(request.resource.data) &&
+                      request.resource.data.uid == request.auth.uid &&
+                      request.resource.data.email == request.auth.token.email &&
+                      (!request.resource.data.keys().hasAny(['isAdmin']) || request.resource.data.isAdmin == false) &&
+                      request.resource.data.createdAt == request.time &&
+                      request.resource.data.updatedAt == request.time;
+
+      allow read: if isEmailVerified() && (userId == request.auth.uid || isAdmin());
+
+      allow update: if isEmailVerified() && 
+                      isValidId(userId) && 
+                      userId == request.auth.uid && 
+                      isValidUser(request.resource.data) &&
+                      request.resource.data.uid == resource.data.uid &&
+                      request.resource.data.email == resource.data.email &&
+                      request.resource.data.createdAt == resource.data.createdAt &&
+                      request.resource.data.updatedAt == request.time &&
+                      (!request.resource.data.keys().hasAny(['isAdmin']) || request.resource.data.isAdmin == resource.data.isAdmin) &&
+                      (
+                        // Action: Update gamification stats, profile, etc.
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                          'name', 'streak', 'badges', 'quizCount', 'lastQuizDate', 'lastDailyDate', 'updatedAt'
+                        ])
+                      );
+
+      allow delete: if isAdmin();
+    }
+
+    function isValidQuiz(data) {
+      return data.keys().hasAll([
+        'userId', 'subject', 'difficulty', 'language', 'score', 
+        'totalQuestions', 'timeSpent', 'questions', 'userAnswers', 'createdAt'
+      ]) &&
+      data.keys().size() == 10 &&
+      data.userId is string && data.userId.size() <= 128 &&
+      data.subject is string && data.subject.size() <= 100 &&
+      data.difficulty is string && data.difficulty.size() <= 20 &&
+      data.language is string && data.language.size() <= 20 &&
+      data.score is int && data.score >= 0 && data.score <= data.totalQuestions &&
+      data.totalQuestions is int && data.totalQuestions >= 0 && data.totalQuestions <= 100 &&
+      data.timeSpent is int && data.timeSpent >= 0 && data.timeSpent <= 86400 &&
+      data.questions is list && data.questions.size() <= 100 &&
+      data.userAnswers is list && data.userAnswers.size() <= 100;
+    }
+
+    function isValidQuizTemplate(data) {
+      return data.keys().hasAll(['questions', 'subject', 'topic', 'generatedBy', 'createdAt']) &&
+             data.questions is list &&
+             data.subject is string &&
+             data.topic is string &&
+             data.generatedBy is string &&
+             data.generatedBy == request.auth.uid;
+    }
+
+    match /quizzes/{quizId} {
+      allow create: if isEmailVerified() && 
+                      isValidId(quizId) && 
+                      (
+                        (request.resource.data.userId == request.auth.uid && isValidQuiz(request.resource.data) && request.resource.data.createdAt == request.time) ||
+                        (request.resource.data.generatedBy == request.auth.uid && isValidQuizTemplate(request.resource.data) && request.resource.data.createdAt == request.time)
+                      );
+      
+      // Enforce query filters on the server-side to prevent other users' records leak
+      allow list: if isEmailVerified() && (resource.data.userId == request.auth.uid || resource.data.keys().hasAll(['questions', 'generatedBy']));
+      allow get: if isEmailVerified() && (resource.data.userId == request.auth.uid || resource.data.keys().hasAll(['questions', 'generatedBy']) || isAdmin());
+      
+      // Quizzes are historically frozen and immutable for standard users
+      allow update, delete: if isAdmin();
+    }
+  }
+}

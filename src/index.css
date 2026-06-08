@@ -1,0 +1,84 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", ui-serif, Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Space Grotesk", sans-serif;
+  
+  /* Geometric Theme Variables */
+  --color-primary: var(--primary);
+  --color-accent: var(--accent);
+  --color-brand-bg: var(--brand-bg);
+  --color-page: var(--bg-page);
+
+  @keyframes river-flow {
+    from { stroke-dashoffset: 200; }
+    to { stroke-dashoffset: 0; }
+  }
+  
+  --animate-river-flow: river-flow 10s linear infinite;
+}
+
+@layer base {
+  :root {
+    --primary: #6366f1; /* indigo-500 */
+    --accent: #14b8a6; /* teal-500 */
+    --brand-bg: #020617; /* slate-950 */
+    --bg-page: #0f172a; /* slate-900 */
+    --font-display: "Space Grotesk", sans-serif;
+  }
+
+  [data-theme='rajasthan'] {
+    --primary: #E91E63; /* Jaipur Pink */
+    --primary-dark: #7B1E3A; /* Royal Maroon */
+    --accent: #D4A017; /* Desert Gold */
+    --brand-bg: #7B1E3A;
+    --bg-page: #F5E6C8; /* Sand Beige */
+    --text-main: #2D1B15;
+  }
+}
+
+@layer base {
+  .theme-rajasthan {
+    --color-main: var(--text-main);
+    --card-shadow: 0 10px 15px -3px rgba(123, 30, 58, 0.1), 0 4px 6px -4px rgba(123, 30, 58, 0.1);
+    background-image: url('https://www.transparenttextures.com/patterns/cubes.png');
+  }
+  .theme-geometric {
+    --color-main: #f1f5f9;
+    --card-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply backdrop-blur-xl bg-white/5 border border-white/10;
+  }
+  
+  .premium-btn {
+    @apply relative overflow-hidden transition-all duration-300 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px] flex items-center justify-center;
+  }
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+body {
+  @apply antialiased;
+}
+
+/* Custom Scrollbar for premium feel */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-400/20 rounded-full hover:bg-slate-400/40;
+}
