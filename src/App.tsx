@@ -123,6 +123,7 @@ export default function App() {
   const handleLogoClick = () => {
     setSystemClicks(prev => {
       const next = prev + 1;
+      console.log("Logo click count:", next);
       if (next >= 5) {
         setShowSystemBar(true);
         return 0;
