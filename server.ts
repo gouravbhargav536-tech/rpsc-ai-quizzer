@@ -2,23 +2,29 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
-import * as admin from "firebase-admin";
+import { initializeApp, cert } from "firebase-admin/app";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 // Initialize Firebase Admin
-let db: admin.firestore.Firestore | null = null;
-const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT 
-  ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT) 
-  : null;
+let db: any = null;
+let serviceAccount = null;
+try {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT && process.env.FIREBASE_SERVICE_ACCOUNT.trim().startsWith('{')) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  }
+} catch (e) {
+  console.error("FIREBASE_SERVICE_ACCOUNT parsing error:", e);
+}
 
 if (serviceAccount) {
   try {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
+    initializeApp({
+      credential: cert(serviceAccount)
     });
-    db = admin.firestore();
+    db = getFirestore();
   } catch (error) {
     console.error("Failed to initialize Firebase Admin:", error);
   }
@@ -60,8 +66,8 @@ async function startServer() {
       if (db) {
         const usageRef = db.doc('system/api_usage');
         await usageRef.set({
-          count: admin.firestore.FieldValue.increment(1),
-          lastUsed: admin.firestore.FieldValue.serverTimestamp()
+          count: FieldValue.increment(1),
+          lastUsed: FieldValue.serverTimestamp()
         }, { merge: true });
       }
 

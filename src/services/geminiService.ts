@@ -1,5 +1,3 @@
-// सबसे ऊपर axios इम्पोर्ट करें ताकि fetch का नाम न आए
-// @ts-ignore
 import axios from 'axios';
 import { Question, QuizConfig } from "../types";
 
@@ -32,19 +30,13 @@ export async function generateQuizQuestions(config: QuizConfig): Promise<Questio
   `;
 
   try {
-    const response = await fetch("/api/generate-quiz", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, config }),
-    });
+    const response = await axios.post("/api/generate-quiz", { prompt, config });
 
-    if (!response.ok) {
-      const errData = await response.json();
-      throw new Error(errData.error || "Failed to generate quiz");
+    if (response.status !== 200) {
+      throw new Error(response.data?.error || "Failed to generate quiz");
     }
 
-    const data = await response.json();
-    const parsedQuestions = JSON.parse(data.text);
+    const parsedQuestions = JSON.parse(response.data.text);
     
     const questions: Question[] = parsedQuestions.map((q: any, index: number) => ({
       id: `q-${index}-${Date.now()}`,

@@ -118,6 +118,8 @@ export default function App() {
     setScreen('INTRO');
   };
 
+  const restoreQuiz = () => {};
+
   const handleLogoClick = () => {
     setSystemClicks(prev => {
       const next = prev + 1;
