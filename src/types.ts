@@ -58,7 +58,6 @@ export interface QuizResult {
 export type ThemeType = 'geometric' | 'rajasthan';
 
 export interface User {
-  uid?: string;
   name: string;
   email: string;
   isAdmin?: boolean;

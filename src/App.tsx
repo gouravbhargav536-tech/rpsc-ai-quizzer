@@ -38,23 +38,24 @@ import {
   Menu,
   X
 } from 'lucide-react';
-import { generateQuizQuestions, getOrCreateQuizService } from './services/geminiService';
+import { generateQuizQuestions } from './services/geminiService';
 import { Question, QuizConfig, Subject, Difficulty, Language, ThemeType, User, ExamPattern } from './types';
-import { mockAuth } from './services/authService';
+import { authService } from './services/authService';
+import { saveQuiz, getUserQuizzes, SavedQuiz } from './lib/quizService';
 import IntroScreen from './components/IntroScreen';
 import AuthScreen from './components/AuthScreen';
 import RiverMap from './components/RiverMap';
+import SystemStatusBar from './components/SystemStatusBar';
 import { useFeedback } from './hooks/useFeedback';
-
-import { auth, db, handleFirestoreError, OperationType } from './services/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, collection, serverTimestamp } from 'firebase/firestore';
-
 
 export default function App() {
   const [screen, setScreen] = useState<'LANDING' | 'INTRO' | 'AUTH' | 'HOME' | 'SETUP' | 'RULES' | 'QUIZ' | 'RESULTS'>('LANDING');
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [oldQuizzes, setOldQuizzes] = useState<SavedQuiz[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showSystemBar, setShowSystemBar] = useState(false);
+  const [systemClicks, setSystemClicks] = useState(0);
   const [theme, setTheme] = useState<ThemeType>('geometric');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [rulesAccepted, setRulesAccepted] = useState(false);
@@ -96,128 +97,36 @@ export default function App() {
     if (saved) setHasSavedQuiz(true);
   }, [screen]);
 
-  // Persist user and progress via Firebase Auth State dynamically
+  // Persist user and progress
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        try {
-          const uid = firebaseUser.uid;
-          const userRef = doc(db, 'users', uid);
-          const userSnap = await getDoc(userRef);
-          
-          let dbUser: any = null;
-          if (userSnap.exists()) {
-            dbUser = userSnap.data();
-          } else {
-            dbUser = {
-              uid,
-              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-              email: firebaseUser.email || '',
-              streak: 0,
-              badges: [] as string[],
-              quizCount: 0,
-              lastQuizDate: '',
-              lastDailyDate: '',
-              isAdmin: firebaseUser.email === 'gk4100777@gmail.com'
-            };
-            
-            await setDoc(userRef, {
-              ...dbUser,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
-            });
-          }
-          
-          setUser(dbUser);
-          setStreak(dbUser.streak || 0);
-          setBadges(dbUser.badges || []);
-          
-          // Fallback storage
-          localStorage.setItem('rpsc_user', JSON.stringify(dbUser));
-          
-          const savedStats = {
-            streak: dbUser.streak || 0,
-            badges: dbUser.badges || [],
-            lastQuizDate: dbUser.lastQuizDate || '',
-            lastDailyDate: dbUser.lastDailyDate || '',
-            quizCount: dbUser.quizCount || 0
-          };
-          localStorage.setItem('rpsc-gamification', JSON.stringify(savedStats));
-          
-          setScreen('HOME');
-        } catch (err) {
-          console.error("Error setting up user doc from auth state:", err);
-          const fallbackUser = {
-            uid: firebaseUser.uid,
-            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-            email: firebaseUser.email || '',
-            isAdmin: firebaseUser.email === 'gk4100777@gmail.com'
-          };
-          setUser(fallbackUser);
-          localStorage.setItem('rpsc_user', JSON.stringify(fallbackUser));
-          setScreen('HOME');
-        }
+    const unsubscribe = authService.onAuthChange((u) => {
+      setUser(u);
+      if (u) {
+        setScreen('HOME');
+        getUserQuizzes().then(setOldQuizzes);
       } else {
-        setUser(null);
-        localStorage.removeItem('rpsc_user');
-        localStorage.removeItem('rpsc_current_quiz');
+        setScreen('INTRO');
       }
     });
+
     return () => unsubscribe();
   }, []);
 
-  // Save quiz progress
-  useEffect(() => {
-    if (screen === 'QUIZ' && questions.length > 0) {
-      const progress = {
-        config,
-        questions,
-        userAnswers,
-        currentIndex,
-        quizTimer,
-        isAnswered,
-        isReviewMode,
-        isDailyChallenge
-      };
-      localStorage.setItem('rpsc_current_quiz', JSON.stringify(progress));
-    } else if (screen === 'RESULTS') {
-      localStorage.removeItem('rpsc_current_quiz');
-    }
-  }, [screen, userAnswers, currentIndex, quizTimer, isAnswered]);
-
-  // Restore progress
-  const restoreQuiz = () => {
-    const saved = localStorage.getItem('rpsc_current_quiz');
-    if (saved) {
-      const data = JSON.parse(saved);
-      setConfig(data.config);
-      setQuestions(data.questions);
-      setUserAnswers(data.userAnswers);
-      setCurrentIndex(data.currentIndex);
-      setQuizTimer(data.quizTimer);
-      setIsAnswered(data.isAnswered);
-      setIsReviewMode(data.isReviewMode);
-      setIsDailyChallenge(data.isDailyChallenge);
-      setScreen('QUIZ');
-      feedback('success');
-    }
+  const handleLogout = () => {
+    feedback('click');
+    authService.logout();
+    setScreen('INTRO');
   };
 
-  useEffect(() => {
-    if (screen === 'LANDING') {
-      const timer = setTimeout(() => {
-        const savedUser = mockAuth.getCurrentUser();
-        setScreen(savedUser ? 'HOME' : 'INTRO');
-      }, 2500);
-      return () => clearTimeout(timer);
-    }
-  }, [screen]);
-
-  const handleLogout = async () => {
-    feedback('click');
-    await mockAuth.logout();
-    setUser(null);
-    setScreen('INTRO');
+  const handleLogoClick = () => {
+    setSystemClicks(prev => {
+      const next = prev + 1;
+      if (next >= 5) {
+        setShowSystemBar(true);
+        return 0;
+      }
+      return next;
+    });
   };
 
   const toggleTheme = () => {
@@ -270,22 +179,17 @@ export default function App() {
     }
   }, []);
 
-  const updateGamificationAndSaveQuiz = async (newScore: number, total: number) => {
+  const updateGamification = (newScore: number, total: number) => {
     const statsStr = localStorage.getItem('rpsc-gamification');
-    let stats = statsStr 
-      ? JSON.parse(statsStr) 
-      : { streak: streak, badges: badges, lastDailyDate: '', quizCount: 0, lastQuizDate: '' };
+    let stats = statsStr ? JSON.parse(statsStr) : { streak: 0, badges: [], lastDailyDate: '', quizCount: 0 };
     
-    if (typeof stats.streak !== 'number') stats.streak = streak;
-    if (!Array.isArray(stats.badges)) stats.badges = badges;
-
     // Update Streak
     const today = new Date().toDateString();
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     
     if (stats.lastQuizDate === yesterday.toDateString()) {
-      stats.streak = (stats.streak || 0) + 1;
+      stats.streak += 1;
     } else if (stats.lastQuizDate !== today) {
       stats.streak = 1;
     }
@@ -303,63 +207,16 @@ export default function App() {
     if (stats.quizCount >= 10 && !stats.badges.includes('Exam Ninja')) stats.badges.push('Exam Ninja');
     if (newScore === total && total >= 10 && !stats.badges.includes('Perfectionist')) stats.badges.push('Perfectionist');
     if (newScore === total && !isDailyChallenge && !stats.badges.includes('Topic Master')) stats.badges.push('Topic Master');
-    if (stats.streak >= 7 && !stats.badges.includes('Consistency King')) stats.badges.push('Consistency King');
+    if (streak >= 7 && !stats.badges.includes('Consistency King')) stats.badges.push('Consistency King');
 
     localStorage.setItem('rpsc-gamification', JSON.stringify(stats));
     setStreak(stats.streak);
     setBadges(stats.badges);
-
-    if (user && user.uid) {
-      const uid = user.uid;
-      
-      // Save Quiz Result
-      try {
-        const quizRef = doc(collection(db, 'quizzes'));
-        const cleanQuestions = questions.map(q => ({
-          id: q.id,
-          question: q.question,
-          options: q.options,
-          correctAnswer: q.correctAnswer,
-          explanation: q.explanation || '',
-          teacherInsight: q.teacherInsight || '',
-        }));
-
-        await setDoc(quizRef, {
-          userId: uid,
-          subject: config.subject,
-          difficulty: config.difficulty,
-          language: config.language,
-          score: newScore,
-          totalQuestions: total,
-          timeSpent: quizTimer,
-          questions: cleanQuestions,
-          userAnswers: userAnswers.map(ans => ans || 'SKIPPED'),
-          createdAt: serverTimestamp()
-        });
-      } catch (e) {
-        handleFirestoreError(e, OperationType.CREATE, 'quizzes');
-      }
-
-      // Sync User Profile
-      try {
-        const userRef = doc(db, 'users', uid);
-        await updateDoc(userRef, {
-          streak: stats.streak,
-          badges: stats.badges,
-          quizCount: stats.quizCount,
-          lastQuizDate: stats.lastQuizDate,
-          lastDailyDate: stats.lastDailyDate,
-          updatedAt: serverTimestamp()
-        });
-      } catch (e) {
-        handleFirestoreError(e, OperationType.UPDATE, `users/${uid}`);
-      }
-    }
   };
 
   useEffect(() => {
     if (screen === 'RESULTS') {
-      updateGamificationAndSaveQuiz(getScore(), questions.length);
+      updateGamification(getScore(), questions.length);
     }
   }, [screen]);
 
@@ -386,35 +243,35 @@ export default function App() {
     setLoading(true);
     setScreen('QUIZ');
     try {
-      const result = await getOrCreateQuizService(config, user?.uid || '', (newCount) => {
-        try {
-          const statsStr = localStorage.getItem('rpsc-gamification');
-          if (statsStr) {
-            const stats = JSON.parse(statsStr);
-            setStreak(stats.streak || 0);
-            setBadges(stats.badges || []);
-          }
-        } catch (e) {
-          console.warn(e);
-        }
-      });
-      
-      const generatedQuestions = result.questions;
-      if (result.source === 'firebase_storage') {
-        console.log("Unlimited access pool: Cached quiz returned.");
-      }
-      
+      const generatedQuestions = await generateQuizQuestions(config);
       setQuestions(generatedQuestions);
       setUserAnswers(new Array(generatedQuestions.length).fill(null));
       setCurrentIndex(0);
       setQuizTimer(0);
       setIsAnswered(false);
-    } catch (error: any) {
-      alert(error?.message || "Error generating quiz. Please try again.");
+
+      // Automatic Save to Firebase
+      saveQuiz(config, generatedQuestions).then(() => {
+        getUserQuizzes().then(setOldQuizzes);
+      });
+    } catch (error) {
+      alert("Error generating quiz. Please try again.");
       setScreen('SETUP');
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadOldQuiz = (q: SavedQuiz) => {
+    setQuestions(q.questions);
+    setUserAnswers(new Array(q.questions.length).fill(null));
+    setCurrentIndex(0);
+    setQuizTimer(0);
+    setIsAnswered(false);
+    setConfig(q.config);
+    setScreen('QUIZ');
+    setShowHistory(false);
+    feedback('success');
   };
 
   const handleSelectAnswer = (answer: string) => {
@@ -574,7 +431,7 @@ export default function App() {
                 ? 'bg-gradient-to-r from-rose-800 via-red-700 to-orange-600 text-white border-b-4 border-amber-600 shadow-lg' 
                 : 'bg-white/80 backdrop-blur-md border-b border-white/10'
             }`}>
-                <div className="flex items-center gap-3 md:gap-4 cursor-pointer" onClick={() => setScreen('HOME')}>
+                <div className="flex items-center gap-3 md:gap-4 cursor-pointer" onClick={handleLogoClick}>
                   <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center font-bold text-lg md:text-xl font-display shadow-lg transition-transform active:scale-95 ${
                     theme === 'rajasthan' ? 'bg-white text-rose-800' : 'bg-primary text-white'
                   }`}>
@@ -736,7 +593,65 @@ export default function App() {
 
               {/* Central Section */}
               <section className="flex-1 bg-slate-50 overflow-y-auto px-4 md:px-12 py-8 md:py-12 flex flex-col pb-32 md:pb-12">
-                <AnimatePresence mode="wait">
+                {showSystemBar && (
+         <SystemStatusBar onClose={() => setShowSystemBar(false)} />
+       )}
+
+       <AnimatePresence>
+         {showHistory && (
+           <motion.div
+             initial={{ opacity: 0 }}
+             animate={{ opacity: 1 }}
+             exit={{ opacity: 0 }}
+             className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4"
+           >
+             <motion.div
+               initial={{ scale: 0.9, y: 20 }}
+               animate={{ scale: 1, y: 0 }}
+               className="bg-white max-w-2xl w-full rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
+             >
+               <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                 <div>
+                   <h3 className="text-xl font-display font-bold">Your Quiz History</h3>
+                   <p className="text-xs text-slate-500">Retrieving old quizzes from Firebase...</p>
+                 </div>
+                 <button onClick={() => setShowHistory(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                   <X size={20} />
+                 </button>
+               </div>
+               
+               <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                 {oldQuizzes.length === 0 ? (
+                   <div className="text-center py-12">
+                     <p className="text-slate-400 italic">No historical quizzes found.</p>
+                   </div>
+                 ) : (
+                   oldQuizzes.map(quiz => (
+                     <div 
+                       key={quiz.id}
+                       className="p-4 border border-slate-100 rounded-2xl hover:border-primary/40 hover:bg-slate-50 transition-all group flex items-center justify-between"
+                     >
+                       <div>
+                         <h4 className="font-bold text-slate-800">{quiz.subject}</h4>
+                         <p className="text-[10px] text-slate-500 uppercase tracking-widest">{quiz.topic}</p>
+                         <p className="text-[9px] text-slate-400 mt-1">{new Date(quiz.createdAt?.seconds * 1000).toLocaleDateString()}</p>
+                       </div>
+                       <button 
+                         onClick={() => loadOldQuiz(quiz)}
+                         className="px-4 py-2 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-widest rounded-xl opacity-0 group-hover:opacity-100 transition-opacity"
+                       >
+                         Retake
+                       </button>
+                     </div>
+                   ))
+                 )}
+               </div>
+             </motion.div>
+           </motion.div>
+         )}
+       </AnimatePresence>
+
+       <AnimatePresence mode="wait">
                   {screen === 'HOME' && (
                     <motion.div
                       key="home-grid"
@@ -751,6 +666,14 @@ export default function App() {
                         </div>
                         
                         <div className="flex flex-wrap gap-3 md:gap-4 items-center">
+                          <button 
+                            onClick={() => setShowHistory(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-primary transition-colors"
+                          >
+                            <History size={16} className="text-slate-400" />
+                            <span className="text-xs font-bold text-slate-600">Old Quizzes</span>
+                          </button>
+
                           {streak > 0 && (
                             <div className="flex items-center gap-2 px-4 py-2 bg-orange-50 border border-orange-200 rounded-2xl shadow-sm">
                               <span className="text-xl">🔥</span>
