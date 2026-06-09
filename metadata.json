@@ -1,6 +1,6 @@
 {
-  "name": "Remix: Remix: RPSC AI MCQ Master",
-  "description": "AI-powered MCQ Quiz Generator for RPSC and competitive exams with adaptive learning and instant feedback.",
+  "name": "RPSC AI MCQ Master",
+  "description": "AI-powered MCQ Quiz Generator for RPSC exams with automatic Firebase saving, topic limits, and history tracking.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

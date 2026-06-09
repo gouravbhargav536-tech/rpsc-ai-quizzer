@@ -2,26 +2,29 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
-import admin from "firebase-admin";
+import * as admin from "firebase-admin";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 // Initialize Firebase Admin
+let db: admin.firestore.Firestore | null = null;
 const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT 
   ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT) 
   : null;
 
 if (serviceAccount) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-  });
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    db = admin.firestore();
+  } catch (error) {
+    console.error("Failed to initialize Firebase Admin:", error);
+  }
 } else {
-  // Fallback or warning
   console.warn("FIREBASE_SERVICE_ACCOUNT not found. System usage tracking will be limited.");
 }
-
-const db = admin.apps.length ? admin.firestore() : null;
 
 async function startServer() {
   const app = express();
