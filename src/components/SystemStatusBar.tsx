@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import axios from 'axios';
 import { Activity, ShieldAlert, Key, Database, X } from 'lucide-react';
 import { testConnection } from '../lib/firebase';
 
@@ -21,9 +20,10 @@ export default function SystemStatusBar({ onClose }: SystemStatusBarProps) {
 
       // Check API Usage
       try {
-        const res = await axios.get('/api/system/usage');
-        if (res.status === 200) {
-          setStats(res.data);
+        const res = await fetch('/api/system/usage');
+        if (res.ok) {
+          const data = await res.json();
+          setStats(data);
         }
       } catch (err) {
         console.error("Failed to fetch usage stats:", err);

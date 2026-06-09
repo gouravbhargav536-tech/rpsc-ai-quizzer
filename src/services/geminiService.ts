@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { Question, QuizConfig } from "../types";
 
 export async function generateQuizQuestions(config: QuizConfig): Promise<Question[]> {
@@ -30,13 +29,19 @@ export async function generateQuizQuestions(config: QuizConfig): Promise<Questio
   `;
 
   try {
-    const response = await axios.post("/api/generate-quiz", { prompt, config });
+    const response = await fetch("/api/generate-quiz", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, config }),
+    });
 
-    if (response.status !== 200) {
-      throw new Error(response.data?.error || "Failed to generate quiz");
+    if (!response.ok) {
+      const errData = await response.json();
+      throw new Error(errData.error || "Failed to generate quiz");
     }
 
-    const parsedQuestions = JSON.parse(response.data.text);
+    const data = await response.json();
+    const parsedQuestions = JSON.parse(data.text);
     
     const questions: Question[] = parsedQuestions.map((q: any, index: number) => ({
       id: `q-${index}-${Date.now()}`,

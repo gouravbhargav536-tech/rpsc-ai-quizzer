@@ -150,6 +150,17 @@ export default function App() {
     };
   }, [screen, loading]);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey && event.key === 's') {
+        setShowSystemBar(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const startSetup = (subject: Subject) => {
     feedback('click');
     setConfig(prev => ({ ...prev, subject }));
